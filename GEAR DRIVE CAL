@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gear Drive Simulator & Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            max-width: 900px;
+            width: 100%;
+        }
+        .controls {
+            flex: 1;
+            min-width: 280px;
+        }
+        .simulation {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 300px;
+        }
+        h2 { margin-top: 0; color: #333; }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .output-box {
+            background: #eef2f5;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+        .output-box p {
+            margin: 5px 0;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #fafafa;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Controls Section -->
+    <div class="controls">
+        <h2>Gear Drive Calculator</h2>
+        
+        <div class="form-group">
+            <label for="calcMode">Calculation Mode:</label>
+            <select id="calcMode" onchange="updateUI()">
+                <option value="1">1. Calculate Gear Ratio & Torque</option>
+                <option value="2">2. Calculate Output Speed</option>
+                <option value="3">3. Find Driven Gear Teeth from Ratio</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="driverTeeth">Driver Gear Teeth ($N_1$):</label>
+            <input type="number" id="driverTeeth" value="12" min="6" max="60" oninput="calculateAndSimulate()">
+        </div>
+
+        <div class="form-group" id="drivenTeethGroup">
+            <label for="drivenTeeth">Driven Gear Teeth ($N_2$):</label>
+            <input type="number" id="drivenTeeth" value="24" min="6" max="60" oninput="calculateAndSimulate()">
+        </div>
+
+        <div class="form-group" id="speedGroup">
+            <label for="inputSpeed">Input Speed (RPM):</label>
+            <input type="number" id="inputSpeed" value="100" min="1" max="1000" oninput="calculateAndSimulate()">
+        </div>
+
+        <div class="form-group" id="desiredRatioGroup" style="display: none;">
+            <label for="desiredRatio">Required Gear Ratio:</label>
+            <input type="number" id="desiredRatio" value="2" step="0.1" min="0.1" oninput="calculateAndSimulate()">
+        </div>
+
+        <!-- Calculated Results -->
+        <div class="output-box">
+            <p id="resRatio">Gear Ratio: -</p>
+            <p id="resTorque">Torque Ratio: -</p>
+            <p id="resSpeed">Output Speed: - RPM</p>
+            <p id="resTeethNote" style="display:none; font-size: 0.85em; color: #e67e22;">
+                *Use whole number of teeth in practice.
+            </p>
+        </div>
+    </div>
+
+    <!-- Visual Simulation Section -->
+    <div class="simulation">
+        <canvas id="gearCanvas" width="400" height="350"></canvas>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById("gearCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let driverAngle = 0;
+    let drivenAngle = 0;
+    let lastTime = performance.now();
+
+    function updateUI() {
+        const mode = document.getElementById("calcMode").value;
+        const drivenTeethGroup = document.getElementById("drivenTeethGroup");
+        const desiredRatioGroup = document.getElementById("desiredRatioGroup");
+
+        if (mode === "3") {
+            drivenTeethGroup.style.display = "none";
+            desiredRatioGroup.style.display = "block";
+        } else {
+            drivenTeethGroup.style.display = "block";
+            desiredRatioGroup.style.display = "none";
+        }
+        calculateAndSimulate();
+    }
+
+    function calculateAndSimulate() {
+        const mode = document.getElementById("calcMode").value;
+        let driverN = Math.max(1, parseInt(document.getElementById("driverTeeth").value) || 1);
+        let drivenN = Math.max(1, parseInt(document.getElementById("drivenTeeth").value) || 1);
+        let inputSpeed = parseFloat(document.getElementById("inputSpeed").value) || 0;
+        let desiredRatio = parseFloat(document.getElementById("desiredRatio").value) || 1;
+
+        const teethNote = document.getElementById("resTeethNote");
+        teethNote.style.display = "none";
+
+        if (mode === "3") {
+            drivenN = Math.round(driverN * desiredRatio);
+            document.getElementById("drivenTeeth").value = drivenN;
+            teethNote.style.display = "block";
+        }
+
+        const ratio = drivenN / driverN;
+        const torqueRatio = ratio;
+        const outputSpeed = inputSpeed * (driverN / drivenN);
+
+        document.getElementById("resRatio").innerText = `Gear Ratio: ${ratio.toFixed(2)}`;
+        document.getElementById("resTorque").innerText = `Torque Ratio: ${torqueRatio.toFixed(2)}`;
+        document.getElementById("resSpeed").innerText = `Output Speed: ${outputSpeed.toFixed(2)} RPM`;
+    }
+
+    function drawGear(x, y, radius, teeth, angle, color, label) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = 2;
+
+        // Draw gear teeth
+        ctx.beginPath();
+        const toothDepth = 8;
+        for (let i = 0; i < teeth; i++) {
+            let a1 = (i / teeth) * Math.PI * 2;
+            let a2 = ((i + 0.25) / teeth) * Math.PI * 2;
+            let a3 = ((i + 0.5) / teeth) * Math.PI * 2;
+            let a4 = ((i + 0.75) / teeth) * Math.PI * 2;
+
+            let rIn = radius - toothDepth / 2;
+            let rOut = radius + toothDepth / 2;
+
+            if (i === 0) ctx.moveTo(Math.cos(a1) * rIn, Math.sin(a1) * rIn);
+            ctx.lineTo(Math.cos(a1) * rOut, Math.sin(a1) * rOut);
+            ctx.lineTo(Math.cos(a2) * rOut, Math.sin(a2) * rOut);
+            ctx.lineTo(Math.cos(a3) * rIn, Math.sin(a3) * rIn);
+            ctx.lineTo(Math.cos(a4) * rIn, Math.sin(a4) * rIn);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw center shaft hole
+        ctx.beginPath();
+        ctx.arc(0, 0, 8, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+        ctx.stroke();
+
+        // Marker line to visualize rotation
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(radius - 5, 0);
+        ctx.strokeStyle = "#e74c3c";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.restore();
+
+        // Label
+        ctx.fillStyle = "#333";
+        ctx.font = "12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`${label} (${teeth}T)`, x, y + radius + 20);
+    }
+
+    function animate(currentTime) {
+        let deltaTime = (currentTime - lastTime) / 1000;
+        lastTime = currentTime;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        let driverN = Math.max(1, parseInt(document.getElementById("driverTeeth").value) || 12);
+        let drivenN = Math.max(1, parseInt(document.getElementById("drivenTeeth").value) || 24);
+        let inputSpeed = parseFloat(document.getElementById("inputSpeed").value) || 0;
+
+        // Module size scaling for drawing
+        const module = 4;
+        let r1 = (driverN * module) / 2;
+        let r2 = (drivenN * module) / 2;
+
+        // Position gears side-by-side
+        let totalWidth = r1 + r2;
+        let startX = (canvas.width - totalWidth) / 2;
+        let x1 = startX + r1;
+        let y1 = canvas.height / 2 - 10;
+        let x2 = x1 + r1 + r2 - 2; // slight overlap for meshing
+        let y2 = y1;
+
+        // Rotate angles based on RPM (driver rotates clockwise, driven counter-clockwise)
+        let driverRPS = inputSpeed / 60;
+        driverAngle += driverRPS * Math.PI * 2 * deltaTime;
+        drivenAngle -= (driverRPS * (driverN / drivenN)) * Math.PI * 2 * deltaTime;
+
+        // Draw Driver (Blue) and Driven (Green)
+        drawGear(x1, y1, r1, driverN, driverAngle, "#3498db", "Driver");
+        drawGear(x2, y2, r2, drivenN, drivenAngle, "#2ecc71", "Driven");
+
+        requestAnimationFrame(animate);
+    }
+
+    updateUI();
+    requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>
